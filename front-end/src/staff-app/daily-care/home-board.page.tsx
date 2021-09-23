@@ -16,7 +16,9 @@ import { useAppState } from "StateProvider"
 export const HomeBoardPage: React.FC = () => {
   const [isRollMode, setIsRollMode] = useState(false)
   const [getStudents, data, loadState] = useApi<{ students: Person[] }>({ url: "get-homeboard-students" })
-  const { filterType, sortType, searchText } = useAppState()
+  const { sortBy, sortType, searchText, setRollStateArr, rollStateArr, filterBy, setFilterBy } = useAppState()
+  const [rollSummary, setRollSummary] = useState({ all: 0, present: 0, late: 0, absent: 0 })
+
   useEffect(() => {
     void getStudents()
   }, [getStudents])
@@ -33,6 +35,31 @@ export const HomeBoardPage: React.FC = () => {
     }
   }
 
+  useEffect(() => {
+    if (isRollMode) {
+      const rollArray = []
+      if (data?.students) {
+        for (const student of data.students) {
+          rollArray.push({ student_id: student.id, roll_state: "unmark" })
+        }
+      }
+      setRollStateArr(rollArray)
+    } else {
+      const rollArray: any = []
+      setRollStateArr(rollArray)
+    }
+  }, [isRollMode])
+
+  useEffect(() => {
+    const rollSummaryCalc = {
+      all: rollStateArr.length,
+      present: rollStateArr.filter((student: any) => student.roll_state === "present").length,
+      late: rollStateArr.filter((student: any) => student.roll_state === "late").length,
+      absent: rollStateArr.filter((student: any) => student.roll_state === "absent").length,
+    }
+    setRollSummary(rollSummaryCalc)
+  }, [rollStateArr])
+
   return (
     <>
       <S.PageContainer>
@@ -48,10 +75,10 @@ export const HomeBoardPage: React.FC = () => {
           <>
             {data.students
               .sort((a, b) => {
-                if (sortType === "asc" && (filterType === "first_name" || filterType === "last_name")) {
-                  return a[filterType].toLowerCase() > b[filterType].toLowerCase() ? 1 : -1
+                if (sortType === "asc" && (sortBy === "first_name" || sortBy === "last_name")) {
+                  return a[sortBy].toLowerCase() > b[sortBy].toLowerCase() ? 1 : -1
                 }
-                return (filterType === "first_name" || filterType === "last_name") && a[filterType].toLowerCase() < b[filterType].toLowerCase() ? 1 : -1
+                return (sortBy === "first_name" || sortBy === "last_name") && a[sortBy].toLowerCase() < b[sortBy].toLowerCase() ? 1 : -1
               })
               .filter((item) => {
                 if ((item.first_name + item.last_name).toLowerCase().includes(searchText.toLowerCase().replace(/ /g, ""))) {
@@ -59,8 +86,28 @@ export const HomeBoardPage: React.FC = () => {
                 }
                 return false
               })
-              .map((s) => (
-                <StudentListTile key={s.id} isRollMode={isRollMode} student={s} />
+              .filter((item) => {
+                if (isRollMode) {
+                  const studentRollState: any = rollStateArr?.find((studentRoll: any) => studentRoll.student_id === item.id)
+                  if (studentRollState?.roll_state === filterBy) {
+                    console.log(filterBy)
+                    return true
+                  } else if (filterBy === "all") {
+                    return true
+                  } else {
+                    return false
+                  }
+                } else {
+                  return true
+                }
+              })
+              .map((s: any) => (
+                <StudentListTile
+                  key={s.id}
+                  isRollMode={isRollMode}
+                  student={s}
+                  initialState={(rollStateArr as any)?.find((studentRollState: any) => studentRollState.student_id === s.id)?.roll_state}
+                ></StudentListTile>
               ))}
           </>
         )}
@@ -71,20 +118,20 @@ export const HomeBoardPage: React.FC = () => {
           </CenteredContainer>
         )}
       </S.PageContainer>
-      <ActiveRollOverlay isActive={isRollMode} onItemClick={onActiveRollAction} />
+      <ActiveRollOverlay isActive={isRollMode} onItemClick={onActiveRollAction} rollSummary={rollSummary} />
     </>
   )
 }
 
 type ToolbarAction = "roll" | "sort"
 type SortType = "asc" | "desc"
-type FilterType = "first" | "last"
+type sortBy = "first" | "last"
 interface ToolbarProps {
   onItemClick: (action: ToolbarAction, value?: string) => void
 }
 const Toolbar: React.FC<ToolbarProps> = (props) => {
   const { onItemClick } = props
-  const { sortType, setSortType, filterType, setFilterType, searchText, setSearchText } = useAppState()
+  const { sortType, setSortType, sortBy, setSortBy, searchText, setSearchText } = useAppState()
   return (
     <S.ToolbarContainer>
       <div>
@@ -92,8 +139,8 @@ const Toolbar: React.FC<ToolbarProps> = (props) => {
           <FontAwesomeIcon icon={sortType === "asc" ? faArrowUp : faArrowDown} size="lg" />
         </Button>
         <span> {sortType === "asc" ? "Asc" : "Desc"}</span>
-        <Switch checked={filterType === "first_name" ? true : false} onChange={() => (filterType === "first_name" ? setFilterType("last_name") : setFilterType("first_name"))} />
-        <span>{filterType === "first_name" ? "First Name" : "Last Name"}</span>
+        <Switch checked={sortBy === "first_name" ? true : false} onChange={() => (sortBy === "first_name" ? setSortBy("last_name") : setSortBy("first_name"))} />
+        <span>{sortBy === "first_name" ? "First Name" : "Last Name"}</span>
       </div>
       <S.SearchContainer>
         <FontAwesomeIcon icon={faSearch} size="sm" />
